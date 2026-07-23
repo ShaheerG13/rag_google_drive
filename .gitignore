@@ -1,0 +1,11 @@
+# secrets — never commit
+.env
+service_account.json
+
+# python
+venv/
+__pycache__/
+*.pyc
+
+# local sync state (added later)
+sync_state.json

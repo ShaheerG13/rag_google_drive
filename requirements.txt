@@ -2,3 +2,8 @@
 pinecone
 python-dotenv
 typing_extensions
+
+# Step 2 dependencies (Google Drive via OAuth)
+google-api-python-client
+google-auth
+google-auth-oauthlib

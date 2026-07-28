@@ -1,43 +1,76 @@
-"""
-Step 2: connect to Google Drive and list the files in our target folder.
-
-Run it with:  ./venv/Scripts/python.exe drive.py
-"""
+# Step 2: connect to Google Drive (via OAuth) and list files in our target folder.
 
 import os
 from dotenv import load_dotenv
-from google.oauth2 import service_account
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
 load_dotenv()
 
-# Read-only access to Drive — the robot can look but never change anything.
+# Read-only access to Drive — we can look but never change anything.
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 
 FOLDER_ID = os.environ["DRIVE_FOLDER_ID"]
 
 
 def get_drive_service():
-    """Log in as the service account and return a Drive API client."""
-    creds = service_account.Credentials.from_service_account_file(
-        "service_account.json", scopes=SCOPES
-    )
-    # "drive", "v3" = version 3 of the Drive API.
+    creds = None
+
+    # token.json holds your saved login from last time, if it exists.
+    if os.path.exists("token.json"):
+        creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+
+    # If we have no valid login, get one.
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            # Token expired but is renewable — refresh it silently.
+            creds.refresh(Request())
+        else:
+            # First time: open a browser for you to log in and approve.
+            flow = InstalledAppFlow.from_client_secrets_file("credentials.json", SCOPES)
+            creds = flow.run_local_server(port=0)
+        # Save the login so future runs don't prompt again.
+        with open("token.json", "w") as f:
+            f.write(creds.to_json())
+
     return build("drive", "v3", credentials=creds)
 
 
 def list_files(service):
-    """Return every non-trashed file directly inside our folder."""
-    # This query means: parent folder is FOLDER_ID, and the file isn't in the trash.
     query = f"'{FOLDER_ID}' in parents and trashed = false"
 
-    results = service.files().list(
-        q=query,
-        # Only ask for the fields we care about (keeps responses small).
-        fields="files(id, name, mimeType, modifiedTime)",
-    ).execute()
+    files = []
+    page_token = None
 
-    return results.get("files", [])
+    # Drive pages results, so keep asking until there's no next page.
+    while True:
+        results = service.files().list(
+            q=query,
+            # md5Checksum lets us skip unchanged files later. Google-native files
+            # (Docs/Sheets/Slides) don't have one — we fall back to modifiedTime.
+            fields="nextPageToken, files(id, name, mimeType, modifiedTime, md5Checksum, webViewLink)",
+            pageSize=100,
+            pageToken=page_token,
+        ).execute()
+
+        files.extend(results.get("files", []))
+
+        page_token = results.get("nextPageToken")
+        if not page_token:
+            return files
+
+
+# Google-native files must be converted ("exported") to a text format.
+# Caps out at 10 MB per file.
+def export_file(service, file_id, mime_type):
+    return service.files().export(fileId=file_id, mimeType=mime_type).execute()
+
+
+# Regular uploads (PDF, .docx, .txt) download as raw bytes.
+def download_file(service, file_id):
+    return service.files().get_media(fileId=file_id).execute()
 
 
 if __name__ == "__main__":

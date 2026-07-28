@@ -16,7 +16,6 @@ FOLDER_ID = os.environ["DRIVE_FOLDER_ID"]
 
 
 def get_drive_service():
-    """Log in as you (once, in the browser) and return a Drive API client."""
     creds = None
 
     # token.json holds your saved login from last time, if it exists.
@@ -40,15 +39,38 @@ def get_drive_service():
 
 
 def list_files(service):
-    """Return every non-trashed file directly inside our folder."""
     query = f"'{FOLDER_ID}' in parents and trashed = false"
 
-    results = service.files().list(
-        q=query,
-        fields="files(id, name, mimeType, modifiedTime)",
-    ).execute()
+    files = []
+    page_token = None
 
-    return results.get("files", [])
+    # Drive pages results, so keep asking until there's no next page.
+    while True:
+        results = service.files().list(
+            q=query,
+            # md5Checksum lets us skip unchanged files later. Google-native files
+            # (Docs/Sheets/Slides) don't have one — we fall back to modifiedTime.
+            fields="nextPageToken, files(id, name, mimeType, modifiedTime, md5Checksum, webViewLink)",
+            pageSize=100,
+            pageToken=page_token,
+        ).execute()
+
+        files.extend(results.get("files", []))
+
+        page_token = results.get("nextPageToken")
+        if not page_token:
+            return files
+
+
+# Google-native files must be converted ("exported") to a text format.
+# Caps out at 10 MB per file.
+def export_file(service, file_id, mime_type):
+    return service.files().export(fileId=file_id, mimeType=mime_type).execute()
+
+
+# Regular uploads (PDF, .docx, .txt) download as raw bytes.
+def download_file(service, file_id):
+    return service.files().get_media(fileId=file_id).execute()
 
 
 if __name__ == "__main__":

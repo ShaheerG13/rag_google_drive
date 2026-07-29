@@ -12,3 +12,7 @@ google-auth-oauthlib
 pypdf
 python-docx
 openai
+
+# Step 5 dependencies (web UI)
+fastapi
+uvicorn

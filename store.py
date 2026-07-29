@@ -9,9 +9,18 @@ load_dotenv()
 INDEX_NAME = "drive-rag"
 
 
+_index = None
+
+
+# Cached: the web server calls this on every request, and building the client each time would add pointless latency
 def get_index():
-    pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
-    return pc.Index(INDEX_NAME)
+    global _index
+
+    if _index is None:
+        pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
+        _index = pc.Index(INDEX_NAME)
+
+    return _index
 
 
 # Every chunk's id is "{drive_file_id}#{chunk_index}"

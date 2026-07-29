@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chat with your Drive</title>
+  <style>
+    :root { color-scheme: light dark; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 720px;
+      margin: 40px auto;
+      padding: 0 20px;
+      line-height: 1.6;
+    }
+
+    h1 { font-size: 1.4rem; margin-bottom: 4px; }
+    .subtitle { color: #888; margin-top: 0; font-size: 0.9rem; }
+
+    form { display: flex; gap: 8px; margin: 24px 0; }
+
+    input {
+      flex: 1;
+      padding: 10px 12px;
+      font-size: 1rem;
+      border: 1px solid #999;
+      border-radius: 6px;
+      background: transparent;
+      color: inherit;
+    }
+
+    button {
+      padding: 10px 18px;
+      font-size: 1rem;
+      border: 0;
+      border-radius: 6px;
+      background: #2563eb;
+      color: white;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.5; cursor: default; }
+
+    #answer { white-space: pre-wrap; margin-bottom: 24px; }
+    #answer.error { color: #dc2626; }
+    .muted { color: #888; }
+
+    h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: #888; }
+    ol { padding-left: 20px; }
+    li { margin-bottom: 6px; }
+    .score { color: #888; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <h1>Chat with your Drive</h1>
+  <p class="subtitle">Answers come only from the files in your Drive folder.</p>
+
+  <!-- A form, not a bare button: this gets Enter-to-submit for free. -->
+  <form id="ask-form">
+    <input id="question" placeholder="Ask a question..." autocomplete="off" autofocus />
+    <button id="submit" type="submit">Ask</button>
+  </form>
+
+  <div id="answer"></div>
+
+  <div id="sources-block" hidden>
+    <h2>Sources</h2>
+    <ol id="sources"></ol>
+  </div>
+
+  <script>
+    const form = document.getElementById('ask-form');
+    const input = document.getElementById('question');
+    const button = document.getElementById('submit');
+    const answerEl = document.getElementById('answer');
+    const sourcesBlock = document.getElementById('sources-block');
+    const sourcesEl = document.getElementById('sources');
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();   // stop the browser reloading the page
+
+      const question = input.value.trim();
+      if (!question) return;
+
+      // Reset the view and lock the button so one question runs at a time.
+      button.disabled = true;
+      answerEl.className = 'muted';
+      answerEl.textContent = 'Thinking...';
+      sourcesBlock.hidden = true;
+      sourcesEl.innerHTML = '';
+
+      try {
+        const res = await fetch('/ask', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question })
+        });
+
+        if (!res.ok) throw new Error(`Server returned ${res.status}`);
+
+        const data = await res.json();
+
+        answerEl.className = '';
+        answerEl.textContent = data.answer;
+
+        // No sources means nothing scored above the threshold — the answer
+        // already says so, so just leave the section hidden.
+        if (data.sources.length) {
+          for (const source of data.sources) {
+            const li = document.createElement('li');
+            const link = document.createElement('a');
+            link.href = source.link;
+            link.target = '_blank';
+            link.rel = 'noopener';
+            // textContent, not innerHTML: file names come from Drive and could
+            // otherwise inject markup into the page.
+            link.textContent = source.name;
+
+            const score = document.createElement('span');
+            score.className = 'score';
+            score.textContent = ` — score ${source.score}`;
+
+            li.append(link, score);
+            sourcesEl.appendChild(li);
+          }
+          sourcesBlock.hidden = false;
+        }
+      } catch (err) {
+        answerEl.className = 'error';
+        answerEl.textContent = `Something went wrong: ${err.message}`;
+      } finally {
+        button.disabled = false;
+        input.focus();
+      }
+    });
+  </script>
+</body>
+</html>

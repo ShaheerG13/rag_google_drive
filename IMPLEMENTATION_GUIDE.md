@@ -87,13 +87,25 @@ list and delete them.
 
 ```python
 def delete_document(index, drive_file_id):
-    """Remove all chunks belonging to one Drive file."""
+    deleted = 0
+
     for page in index.list(prefix=f"{drive_file_id}#"):   # paginates for you
-        index.delete(ids=[v.id for v in page.vectors])
+        ids = [v.id for v in page.vectors]
+        if ids:                                            # skip the empty first-ingest case
+            index.delete(ids=ids)
+            deleted += len(ids)
+
+    return deleted
 ```
 
-(`index.delete()` *does* accept a `filter=` argument — but on serverless it raises. The
-signature is misleading; use the prefix approach above.)
+Two traps here, both easy to hit:
+
+- **`index.list()` yields pages, not IDs.** In the current SDK (9.x) each item is a
+  `ListResponse` whose IDs live at `page.vectors`, each with a `.id`. Older SDKs yielded
+  plain lists of ID strings, so plenty of tutorials still show `for ids in index.list(...)`
+  — that form silently breaks here.
+- **`index.delete()` accepts a `filter=` argument that serverless rejects at runtime.** The
+  signature suggests delete-by-metadata works; it doesn't. Use the prefix approach above.
 
 This replaces what `ON DELETE CASCADE` would do in a relational DB, and it's how we handle
 both **deleted files** and **re-ingesting a changed file** (delete old chunks, insert new).

@@ -1,7 +1,5 @@
 # Step 5: the web app — one /ask endpoint, plus the HTML page that calls it
-#
-# Run it with:  ./venv/Scripts/uvicorn.exe app:app --reload
-# Then open http://localhost:8000
+# Run it with: uvicorn app:app --reload
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -12,7 +10,7 @@ import rag
 app = FastAPI()
 
 
-# Pydantic checks the incoming JSON for us: no "question" field → 422, not a crash.
+# Pydantic checks the incoming JSON for us: no "question" field → 422, not a crash
 class Query(BaseModel):
     question: str
 
@@ -25,6 +23,5 @@ def ask(query: Query):
     return rag.answer(query.question)
 
 
-# Must be mounted last: this catches every path not already claimed above,
-# so /ask has to be registered first. html=True serves index.html at "/".
+# Must be mounted last: this catches every path not already claimed above, so /ask has to be registered first. html=True serves index.html at "/".
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

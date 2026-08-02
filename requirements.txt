@@ -16,3 +16,6 @@ openai
 # Step 5 dependencies (web UI)
 fastapi
 uvicorn
+
+# Step 6 dependencies (near-instant sync)
+apscheduler
